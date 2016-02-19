@@ -2,8 +2,7 @@
 {application, exometer_core,
  [
   {description, "Code instrumentation and metrics collection package."},
-  {vsn, git},
-  {registered, []},
+  {vsn, "1.0.0"},
   {applications,
    [
     kernel,
@@ -11,13 +10,13 @@
     setup,
     lager
    ]},
-  {included_applications,
-   [
-   ]},
   {mod, {exometer_core_app, []}},
   {start_phases, [{preset_defaults, []},
                   {start_reporters, []}]},
   {env,
    [
-   ]}
+   ]},
+  {maintainers,["basho", "Heinz N. Gies"]},
+  {licenses,["MPL"]},
+  {links,[{"Github","https://github.com/basho/exometer_core"}]}
  ]}.
