@@ -91,7 +91,7 @@
 %% @doc Start exometer and dependent apps (for testing).
 start() ->
     lager:start(),
-    application:start(exometer_core).
+    application:ensure_all_started(exometer_core).
 
 %% @doc Stop exometer and dependent apps (for testing).
 stop() ->

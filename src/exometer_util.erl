@@ -363,7 +363,7 @@ key_match_test() ->
     {ok,yes} = report_type([a,b,c], [], [{[a,b,'_'], yes}]),
     {ok,yes} = report_type([a,b,c], [], [{[a,'_',c], yes}]),
     {ok,yes} = report_type([a,b,c], [], [{[a,b|'_'], yes}]),
-    {ok,yes} = report_type([a,b,c], [{type,yes}], [{[a,b,c], no}]),
+    {ok,yes} = report_type([a,b,c], [{report_type,yes}], [{[a,b,c], no}]),
     ok.
 
 -endif.
