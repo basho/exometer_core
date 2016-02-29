@@ -38,6 +38,7 @@
 -module(exometer_proc).
 
 -export([spawn_process/2,
+         spawn_process/3,
          cast/2,
          call/2,
          process_options/1,
@@ -74,8 +75,18 @@ spawn_process(Name, F) when is_function(F,0) ->
     Parent = self(),
     proc_lib:spawn(fun() ->
                            exometer_admin:monitor(Name, self()),
-			   init(Name, Mod, F, Parent)
+                           init(Name, Mod, F, Parent)
                    end).
+
+spawn_process(Name, F, Opts) ->
+    {_, Mod} = erlang:fun_info(F, module),
+    Parent = self(),
+    SpawnOpts = proplists:get_value(spawn_opts, Opts, []),
+    OnError = proplists:get_value(on_error, Opts, delete),
+    proc_lib:spawn_opt(fun() ->
+                               exometer_admin:monitor(Name, self(), OnError),
+                               init(Name, Mod, F, Parent)
+                       end, SpawnOpts).
 
 init(Name, Mod, StartF, ParentPid) ->
     I = #info{parent = ParentPid},
@@ -201,8 +212,8 @@ format_status(Opt, StatusData) ->
                       pid_to_list(Name);
                  is_atom(Name) ->
                       Name;
-		 true ->
-		      lists:flatten(io_lib:fwrite("~w", [Name]))
+                 true ->
+                      lists:flatten(io_lib:fwrite("~w", [Name]))
               end,
     Header = lists:concat(["Status for exometer_proc ", NameTag]),
     Log = sys:get_debug(log, Debug, []),

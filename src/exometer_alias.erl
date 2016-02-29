@@ -23,26 +23,27 @@
 -behaviour(gen_server).
 
 -export([new/3,
-	 load/1,
-	 unload/1,
-	 delete/1,
-	 update/2,
-	 resolve/1,
+         load/1,
+         unload/1,
+         check_map/1,
+         delete/1,
+         update/2,
+         resolve/1,
          reverse_map/2,
-	 get_value/1,
-	 prefix_match/1,
-	 prefix_foldl/3,
-	 prefix_foldr/3,
-	 regexp_foldl/3,
-	 regexp_foldr/3]).
+         get_value/1,
+         prefix_match/1,
+         prefix_foldl/3,
+         prefix_foldr/3,
+         regexp_foldl/3,
+         regexp_foldr/3]).
 
 -export([start_link/0,
-	 init/1,
-	 handle_call/3,
-	 handle_cast/2,
-	 handle_info/2,
-	 terminate/2,
-	 code_change/3]).
+         init/1,
+         handle_call/3,
+         handle_cast/2,
+         handle_info/2,
+         terminate/2,
+         code_change/3]).
 
 -define(TAB, ?MODULE).
 -define(COMPILED_RE(P), is_tuple(P), element(1, P) == re_pattern).
@@ -75,11 +76,13 @@
 %% type, and returns `{error, exists}' if the alias has already been
 %% registered.
 %% @end
-new(Alias, Entry, DP) when is_list(Entry), is_atom(DP), is_atom(Alias);
-			   is_list(Entry), is_atom(DP), is_binary(Alias);
-                           is_list(Entry), is_integer(DP), is_atom(Alias);
-			   is_list(Entry), is_integer(DP), is_binary(Alias) ->
-    gen_server:call(?MODULE, {new, Alias, Entry, DP}).
+new(Alias, Entry, DP) ->
+    case valid_arg(Alias, Entry, DP) of
+        true ->
+            gen_server:call(?MODULE, {new, Alias, Entry, DP});
+        false ->
+            {error, invalid}
+    end.
 
 -spec load(fun(() -> stat_map())) -> ok.
 %% @doc Load a list of mappings between entry+datapoint pairs and aliases.
@@ -120,10 +123,10 @@ delete(Alias) ->
 resolve(Alias) ->
     Key = to_key(Alias),
     case ets_lookup(Key) of
-	[#alias{entry = Entry, dp = DP}] ->
-	    {Entry, DP};
-	[] ->
-	    error
+        [#alias{entry = Entry, dp = DP}] ->
+            {Entry, DP};
+        [] ->
+            error
     end.
 
 -spec reverse_map(name() | '_', dp() | '_') -> [{alias(),name(),dp()}].
@@ -147,15 +150,15 @@ reverse_map(Name, Datapoint) ->
 %% @end
 get_value(Alias) ->
     case resolve(Alias) of
-	{Entry, DP} ->
-	    case exometer:get_value(Entry, [DP]) of
-		{ok, [{_, Value}]} ->
-		    {ok, Value};
-		Error ->
-		    Error
-	    end;
-	error ->
-	    {error, not_found}
+        {Entry, DP} ->
+            case exometer:get_value(Entry, [DP]) of
+                {ok, [{_, Value}]} ->
+                    {ok, Value};
+                Error ->
+                    Error
+            end;
+        error ->
+            {error, not_found}
     end.
 
 -spec update(alias(), any()) -> ok | {error, any()}.
@@ -167,10 +170,10 @@ get_value(Alias) ->
 %% @end
 update(Alias, Value) ->
     case resolve(Alias) of
-	{Entry, _} ->
-	    exometer:update(Entry, Value);
-	error ->
-	    {error, not_found}
+        {Entry, _} ->
+            exometer:update(Entry, Value);
+        error ->
+            {error, not_found}
     end.
 
 -spec prefix_match(binary()) -> [{alias(), name(), dp()}].
@@ -190,28 +193,28 @@ prefix_match(Pattern) when is_binary(Pattern) ->
 %% @end
 prefix_foldl(Prefix, F, Acc) ->
     case ets_lookup(Prefix) of
-	[] ->
-	    prefix_foldl(ets_next(Prefix), Prefix, byte_size(Prefix),
-			 F, Acc);
-	[#alias{key = Key}] ->
-	    prefix_foldl(Key, Prefix, byte_size(Prefix), F, Acc)
+        [] ->
+            prefix_foldl(ets_next(Prefix), Prefix, byte_size(Prefix),
+                         F, Acc);
+        [#alias{key = Key}] ->
+            prefix_foldl(Key, Prefix, byte_size(Prefix), F, Acc)
     end.
 
 prefix_foldl('$end_of_table', _, _, _, Acc) ->
     Acc;
 prefix_foldl(Key, Pattern, Sz, F, Acc) ->
     case Key of
-	<<Pattern:Sz/binary, _/binary>> ->
-	    case ets_lookup(Key) of
-		[#alias{alias = Alias, entry = E, dp = DP}] ->
-		    prefix_foldl(ets_next(Key),
-				 Pattern, Sz, F,
-				 F(Alias, E, DP, Acc));
-		_ ->
-		    prefix_foldl(ets_next(Key), Pattern, Sz, F, Acc)
-	    end;
-	_ ->
-	    Acc
+        <<Pattern:Sz/binary, _/binary>> ->
+            case ets_lookup(Key) of
+                [#alias{alias = Alias, entry = E, dp = DP}] ->
+                    prefix_foldl(ets_next(Key),
+                                 Pattern, Sz, F,
+                                 F(Alias, E, DP, Acc));
+                _ ->
+                    prefix_foldl(ets_next(Key), Pattern, Sz, F, Acc)
+            end;
+        _ ->
+            Acc
     end.
 
 -spec prefix_foldr(binary(), fold_fun(), acc()) -> acc().
@@ -222,27 +225,27 @@ prefix_foldl(Key, Pattern, Sz, F, Acc) ->
 %% @end
 prefix_foldr(Pattern, F, Acc) ->
     case ets_lookup(Pattern) of
-	[] ->
-	    prefix_foldr(ets_next(Pattern), Pattern, byte_size(Pattern),
-			 F, Acc);
-	[#alias{key = Key}] ->
-	    prefix_foldr(Key, Pattern, byte_size(Pattern), F, Acc)
+        [] ->
+            prefix_foldr(ets_next(Pattern), Pattern, byte_size(Pattern),
+                         F, Acc);
+        [#alias{key = Key}] ->
+            prefix_foldr(Key, Pattern, byte_size(Pattern), F, Acc)
     end.
 
 prefix_foldr('$end_of_table', _, _, _, Acc) ->
     Acc;
 prefix_foldr(Key, Pattern, Sz, F, Acc) ->
     case Key of
-	<<Pattern:Sz/binary, _/binary>> ->
-	    case ets_lookup(Key) of
-		[#alias{alias = Alias, entry = E, dp = DP}] ->
-		    F(Alias, E, DP, prefix_foldr(ets_next(Key),
-						 Pattern, Sz, F, Acc));
-		_ ->
-		    prefix_foldr(ets_next(Key), Pattern, Sz, F, Acc)
-	    end;
-	_ ->
-	    Acc
+        <<Pattern:Sz/binary, _/binary>> ->
+            case ets_lookup(Key) of
+                [#alias{alias = Alias, entry = E, dp = DP}] ->
+                    F(Alias, E, DP, prefix_foldr(ets_next(Key),
+                                                 Pattern, Sz, F, Acc));
+                _ ->
+                    prefix_foldr(ets_next(Key), Pattern, Sz, F, Acc)
+            end;
+        _ ->
+            Acc
     end.
 
 -spec regexp_foldl(regexp(), fold_fun(), acc()) -> acc().
@@ -260,35 +263,35 @@ regexp_foldl(Regexp, F, Acc) when ?COMPILED_RE(Regexp) ->
 regexp_foldl(Regexp, F, Acc) ->
     Prefix = regexp_prefix(Regexp),
     case ets_lookup(Prefix) of
-	[] ->
-	    regexp_foldl(ets_next(Prefix), Prefix, byte_size(Prefix),
-			 re_compile(Regexp), F, Acc);
-	[#alias{key = Key}] ->
-	    regexp_foldl(Key, Prefix, byte_size(Prefix),
-			 re_compile(Regexp), F, Acc)
+        [] ->
+            regexp_foldl(ets_next(Prefix), Prefix, byte_size(Prefix),
+                         re_compile(Regexp), F, Acc);
+        [#alias{key = Key}] ->
+            regexp_foldl(Key, Prefix, byte_size(Prefix),
+                         re_compile(Regexp), F, Acc)
     end.
 
 regexp_foldl('$end_of_table', _, _, _, _, Acc) ->
     Acc;
 regexp_foldl(Key, Prefix, Sz, Pattern, F, Acc) ->
     case Key of
-	<<Prefix:Sz/binary, _/binary>> ->
-	    case re:run(Key, Pattern) of
-		{match, _} ->
-		    case ets_lookup(Key) of
-			[#alias{alias = Alias, entry = E, dp = DP}] ->
-			    regexp_foldl(ets_next(Key), Prefix, Sz,
-					 Pattern, F, F(Alias, E, DP, Acc));
-			_ ->
-			    regexp_foldl(ets_next(Key),
-					 Prefix, Sz, Pattern, F, Acc)
-		    end;
-		nomatch ->
-		    regexp_foldl(ets_next(Key),
-				 Prefix, Sz, Pattern, F, Acc)
-	    end;
-	_ ->
-	    Acc
+        <<Prefix:Sz/binary, _/binary>> ->
+            case re:run(Key, Pattern) of
+                {match, _} ->
+                    case ets_lookup(Key) of
+                        [#alias{alias = Alias, entry = E, dp = DP}] ->
+                            regexp_foldl(ets_next(Key), Prefix, Sz,
+                                         Pattern, F, F(Alias, E, DP, Acc));
+                        _ ->
+                            regexp_foldl(ets_next(Key),
+                                         Prefix, Sz, Pattern, F, Acc)
+                    end;
+                nomatch ->
+                    regexp_foldl(ets_next(Key),
+                                 Prefix, Sz, Pattern, F, Acc)
+            end;
+        _ ->
+            Acc
     end.
 
 -spec regexp_foldr(regexp(), fold_fun(), acc()) -> acc().
@@ -306,37 +309,37 @@ regexp_foldr(Pattern, F, Acc) when ?COMPILED_RE(Pattern) ->
 regexp_foldr(Pattern, F, Acc) ->
     Prefix = regexp_prefix(Pattern),
     case ets_lookup(Prefix) of
-	[] ->
-	    regexp_foldr(ets_next(Prefix), Prefix, byte_size(Prefix),
-			 re_compile(Pattern),
-			 F, Acc);
-	[#alias{key = Key}] ->
-	    regexp_foldr(Key, Prefix, byte_size(Prefix),
-			 re_compile(Pattern), F, Acc)
+        [] ->
+            regexp_foldr(ets_next(Prefix), Prefix, byte_size(Prefix),
+                         re_compile(Pattern),
+                         F, Acc);
+        [#alias{key = Key}] ->
+            regexp_foldr(Key, Prefix, byte_size(Prefix),
+                         re_compile(Pattern), F, Acc)
     end.
 
 regexp_foldr('$end_of_table', _, _, _, _, Acc) ->
     Acc;
 regexp_foldr(Key, Prefix, Sz, Pattern, F, Acc) ->
     case Key of
-	<<Prefix:Sz/binary, _/binary>> ->
-	    case re:run(Key, Pattern) of
-		{match, _} ->
-		    case ets_lookup(Key) of
-			[#alias{alias = Alias, entry = E, dp = DP}] ->
-			    F(Alias, E, DP, regexp_foldr(ets_next(Key),
-							 Prefix, Sz, Pattern,
-							 F, Acc));
-			_ ->
-			    regexp_foldr(ets_next(Key), Prefix, Sz,
-					 Pattern, F, Acc)
-		    end;
-		nomatch ->
-		    regexp_foldr(ets_next(Key), Prefix, Sz,
-				 Pattern, F, Acc)
-	    end;
-	_ ->
-	    Acc
+        <<Prefix:Sz/binary, _/binary>> ->
+            case re:run(Key, Pattern) of
+                {match, _} ->
+                    case ets_lookup(Key) of
+                        [#alias{alias = Alias, entry = E, dp = DP}] ->
+                            F(Alias, E, DP, regexp_foldr(ets_next(Key),
+                                                         Prefix, Sz, Pattern,
+                                                         F, Acc));
+                        _ ->
+                            regexp_foldr(ets_next(Key), Prefix, Sz,
+                                         Pattern, F, Acc)
+                    end;
+                nomatch ->
+                    regexp_foldr(ets_next(Key), Prefix, Sz,
+                                 Pattern, F, Acc)
+            end;
+        _ ->
+            Acc
     end.
 
 just_acc(Alias, Entry, DP, Acc) ->
@@ -345,11 +348,11 @@ just_acc(Alias, Entry, DP, Acc) ->
 start_link() ->
     Tab = maybe_create_ets(),
     case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
-	{ok, Pid} = Res ->
-	    ets:give_away(Tab, Pid, give_away),
-	    Res;
-	Other ->
-	    Other
+        {ok, Pid} = Res ->
+            ets:give_away(Tab, Pid, give_away),
+            Res;
+        Other ->
+            Other
     end.
 
 %% @private
@@ -360,25 +363,25 @@ init(_) ->
 handle_call({new, Alias, Entry, DP}, _, St) ->
     Key = to_key(Alias),
     Res = case ets:member(?TAB, Key) of
-	      true ->
-		  {error, exists};
-	      false ->
-		  ets:insert(?TAB, #alias{key = Key, alias = Alias,
-					  entry = Entry, dp = DP}),
-		  ok
-	  end,
+              true ->
+                  {error, exists};
+              false ->
+                  ets:insert(?TAB, #alias{key = Key, alias = Alias,
+                                          entry = Entry, dp = DP}),
+                  ok
+          end,
     {reply, Res, St};
 handle_call({load, F}, _, St) ->
     Res = try do_load(F)
-	  catch
-	      error:R -> {error, R}
-	  end,
+          catch
+              error:R -> {error, R}
+          end,
     {reply, Res, St};
 handle_call({unload, F}, _, St) ->
     Res = try do_unload(F)
-	  catch
-	      error:R -> {error, R}
-	  end,
+          catch
+              error:R -> {error, R}
+          end,
     {reply, Res, St};
 handle_call({delete, Alias}, _, St) ->
     Key = to_key(Alias),
@@ -407,11 +410,11 @@ code_change(_, St, _) ->
 
 maybe_create_ets() ->
     case ets:info(?TAB, name) of
-	undefined ->
-	    ets:new(?TAB, [ordered_set, named_table, public,
-			   {keypos, #alias.key}, {heir, self(), failover}]);
-	_ ->
-	    ?TAB
+        undefined ->
+            ets:new(?TAB, [ordered_set, named_table, public,
+                           {keypos, #alias.key}, {heir, self(), failover}]);
+        _ ->
+            ?TAB
     end.
 
 ets_lookup(Key) -> ets:lookup(?TAB, Key).
@@ -425,32 +428,112 @@ to_key(A) when is_binary(A) ->
 
 do_load(F) ->
     Map = F(),
+    check_map(Map),
     lists:foreach(
       fun({Entry, DPs}) when is_list(Entry), is_list(DPs) ->
-	      lists:foreach(
-		fun({DP, Alias}) when is_atom(DP), is_atom(Alias);
-				      is_atom(DP), is_binary(Alias) ->
-			Key = to_key(Alias),
-			ets:insert(?TAB, #alias{key = Key,
-						alias = Alias,
-						entry = Entry,
-						dp = DP})
-		end, DPs)
+              lists:foreach(
+                fun({DP, Alias}) when is_atom(DP), is_atom(Alias);
+                                      is_atom(DP), is_binary(Alias) ->
+                        Key = to_key(Alias),
+                        true = ets:insert_new(?TAB, #alias{key = Key,
+                                                           alias = Alias,
+                                                           entry = Entry,
+                                                           dp = DP})
+                end, DPs)
       end, Map).
+
+check_map(Map) ->
+    case lists:foldl(
+           fun(F, {M1,Es}) ->
+                   F(M1, Es)
+           end, {Map, []}, [fun check_args/2,
+                            fun check_duplicates/2,
+                            fun check_existing/2]) of
+        {Map1, []} ->
+            Map1;
+        {_, Errors} ->
+            error({map_error, Errors})
+    end.
+
+check_args(Map, Es) ->
+    Check = deep_fold(
+              fun({Alias, Entry, DP}, D) ->
+                      case valid_arg(Alias, Entry, DP) of
+                          true -> D;
+                          false ->
+                              orddict:append(Alias, {Entry, DP}, D)
+                      end;
+                 (Other, D) ->
+                      orddict:append(unrecognized, Other, D)
+              end, orddict:new(), Map),
+    maybe_add_errors(Check, invalid, Map, Es).
+
+check_duplicates(Map, Es) ->
+    Check = deep_fold(
+              fun({Alias, Entry, DP}, D) ->
+                      dict:append(Alias, {Entry,DP}, D);
+                 (_, D) ->
+                      D
+              end, dict:new(), Map),
+    %% We have duplicates if the value of any dict item is a list of length > 1.
+    Dups = dict:fold(fun(K, [_,_|_] = V, Acc) -> [{K, V}|Acc];
+                        (_, _, Acc) -> Acc
+                     end, [], Check),
+    maybe_add_errors(Dups, duplicate_aliases, Map, Es).
+
+check_existing(Map, Es) ->
+    Check = deep_fold(
+              fun({Alias, Entry, DP}, Acc) ->
+                      %% Accept identical entries
+                      case resolve(Alias) of
+                          {Entry, DP} -> Acc;
+                          error       -> Acc;
+                          {OtherEntry, OtherDP} ->
+                              orddict:append(Alias, {OtherEntry, OtherDP}, Acc)
+                      end;
+                 (_, D) ->
+                      D
+              end, orddict:new(), Map),
+    maybe_add_errors(Check, existing_aliases, Map, Es).
+
+valid_arg(Alias, Entry, DP)
+  when is_list(Entry), is_atom(DP), is_atom(Alias);
+       is_list(Entry), is_atom(DP), is_binary(Alias);
+       is_list(Entry), is_integer(DP), is_atom(Alias);
+       is_list(Entry), is_integer(DP), is_binary(Alias) -> true;
+valid_arg(_, _, _) ->
+    false.
+
+
+maybe_add_errors([], _, Map, Es) -> {Map, Es};
+maybe_add_errors([_|_] = NewErrors, Kind, Map, Es) ->
+    {Map, [{Kind, NewErrors}|Es]}.
+
+deep_fold(F, Acc, Map) ->
+    lists:foldl(
+      fun({Entry, DPs}, Acc1) ->
+              lists:foldl(
+                fun({DP, Alias}, Acc2) ->
+                        F({Alias, Entry, DP}, Acc2)
+                end, Acc1, DPs);
+         (Other, Acc1) ->
+              %% Bad input, but let's pass it on to the check function
+              F(Other, Acc1)
+      end, Acc, Map).
 
 do_unload(F) ->
     Map = F(),
     lists:foreach(
       fun({Entry, DPs}) when is_list(Entry), is_list(DPs) ->
-	      lists:foreach(
-		fun({DP, Alias}) when is_atom(Alias);
+              lists:foreach(
+                fun({DP, Alias}) when is_atom(Alias);
                                       is_binary(Alias) ->
-			Key = to_key(Alias),
-			ets:delete_object(?TAB, #alias{key = Key,
+                        Key = to_key(Alias),
+                        ets:delete_object(?TAB, #alias{key = Key,
                                                        alias = Alias,
                                                        entry = Entry,
                                                        dp = DP})
-		end, DPs)
+                end, DPs)
       end, Map).
 
 re_compile(R) ->
@@ -482,11 +565,11 @@ regexp_prefix_(<<>>, Acc) ->
 alias_test_() ->
     {setup,
      fun() ->
-	     exometer:start(),
-	     create_entries(),
-	     load_aliases(),
-	     ets:tab2list(?TAB),
-	     ok
+             exometer:start(),
+             create_entries(),
+             load_aliases(),
+             ets:tab2list(?TAB),
+             ok
      end,
      fun(_) -> application:stop(exometer) end,
      [?_test(t_resolve()),
@@ -532,7 +615,7 @@ t_get_value() ->
 t_prefix_match() ->
     ?assertMatch(
        [{<<?Pfx,"_g_1" >>, [?Pfx,g,1 ],value},
-	{<<?Pfx,"_g_10">>, [?Pfx,g,10],value}],
+        {<<?Pfx,"_g_10">>, [?Pfx,g,10],value}],
        prefix_match(<<?Pfx,"_g_1">>)).
 
 t_prefix_match2() ->
@@ -542,29 +625,29 @@ t_prefix_match2() ->
 t_prefix_foldl() ->
     ?assertMatch(
        [{<<?Pfx,"_g_10">>, [?Pfx,g,10],value},
-	{<<?Pfx,"_g_1" >>, [?Pfx,g,1 ],value}],
+        {<<?Pfx,"_g_1" >>, [?Pfx,g,1 ],value}],
        prefix_foldl(<<?Pfx,"_g_1">>,
-                   fun(A,E,D,Acc) -> [{A,E,D}|Acc] end, [])).
+                    fun(A,E,D,Acc) -> [{A,E,D}|Acc] end, [])).
 
 t_regexp_foldl() ->
     ?assertMatch(
        [{<<?Pfx,"_g_5">>,[?Pfx,g,5],value},
-	{<<?Pfx,"_g_4">>,[?Pfx,g,4],value},
-	{<<?Pfx,"_g_3">>,[?Pfx,g,3],value}],
+        {<<?Pfx,"_g_4">>,[?Pfx,g,4],value},
+        {<<?Pfx,"_g_3">>,[?Pfx,g,3],value}],
        regexp_foldl(<<"^",?Pfx,"_g_[345]$">>,
-		    fun(A,E,D,Acc) -> [{A,E,D}|Acc] end, [])).
+                    fun(A,E,D,Acc) -> [{A,E,D}|Acc] end, [])).
 
 t_regexp_foldl2() ->
     ?assertMatch([], regexp_foldl(<<"^",?Pfx,"_g_[ab]$">>,
-				  fun(A,E,D,Acc) -> [{A,E,D}|Acc] end, [])).
+                                  fun(A,E,D,Acc) -> [{A,E,D}|Acc] end, [])).
 
 t_regexp_foldr() ->
     ?assertMatch(
        [{<<?Pfx,"_g_3">>,[?Pfx,g,3],value},
-	{<<?Pfx,"_g_4">>,[?Pfx,g,4],value},
-	{<<?Pfx,"_g_5">>,[?Pfx,g,5],value}],
+        {<<?Pfx,"_g_4">>,[?Pfx,g,4],value},
+        {<<?Pfx,"_g_5">>,[?Pfx,g,5],value}],
        regexp_foldr(<<"^",?Pfx,"_g_[345]$">>,
-		    fun(A,E,D,Acc) -> [{A,E,D}|Acc] end, [])).
+                    fun(A,E,D,Acc) -> [{A,E,D}|Acc] end, [])).
 
 t_unload() ->
     ok = unload(fun test_aliases/0),
@@ -590,7 +673,7 @@ load_aliases() ->
 
 test_aliases() ->
     [{[?Pfx,g,N], [{value, iolist_to_binary([?Pfx, "_g_",
-						integer_to_list(N)])}]}
+                                             integer_to_list(N)])}]}
      || N <- lists:seq(1,10)].
 
 -endif.

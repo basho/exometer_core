@@ -23,10 +23,12 @@
     test_std_counter/1,
     test_gauge/1,
     test_fast_counter/1,
+    test_wrapping_counter/1,
     test_update_or_create/1,
     test_update_or_create2/1,
     test_default_override/1,
     test_std_histogram/1,
+    test_slot_histogram/1,
     test_std_duration/1,
     test_folsom_histogram/1,
     test_aggregate/1,
@@ -46,6 +48,8 @@
    [
     vals/0
    ]).
+
+-import(exometer_test_util, [majority/2]).
 
 -include_lib("common_test/include/ct.hrl").
 
@@ -67,7 +71,8 @@ groups() ->
       [
         test_std_counter,
         test_gauge,
-        test_fast_counter
+        test_fast_counter,
+        test_wrapping_counter
       ]},
      {test_defaults, [shuffle],
       [
@@ -78,6 +83,7 @@ groups() ->
      {test_histogram, [shuffle],
       [
        test_std_histogram,
+       test_slot_histogram,
        test_std_duration,
        test_folsom_histogram,
        test_aggregate,
@@ -109,51 +115,64 @@ init_per_testcase(Case, Config) when
       Case == test_folsom_histogram;
       Case == test_history1_folsom;
       Case == test_history4_folsom ->
+    {ok, StartedApps} = exometer_test_util:ensure_all_started(exometer_core),
     application:start(bear),
     application:start(folsom),
-    exometer:start(),
-    Config;
+    [{started_apps, StartedApps} | Config];
 init_per_testcase(Case, Config) when
       Case == test_ext_predef;
       Case == test_function_match ->
     ok = application:set_env(stdlib, exometer_predefined, {script, "../../test/data/test_defaults.script"}),
-    ok = application:start(setup),
-    exometer:start(),
-    Config;
+    {ok, StartedApps} = exometer_test_util:ensure_all_started(exometer_core),
+    ct:log("StartedApps = ~p~n", [StartedApps]),
+    [{started_apps, StartedApps} | Config];
 init_per_testcase(test_app_predef, Config) ->
     compile_app1(Config),
-    exometer:start(),
+    {ok, StartedApps} = exometer_test_util:ensure_all_started(exometer_core),
+    ct:log("StartedApps = ~p~n", [StartedApps]),
     Scr = filename:join(filename:dirname(
-			  filename:absname(?config(data_dir, Config))),
-			"data/app1.script"),
+                          filename:absname(?config(data_dir, Config))),
+                        "data/app1.script"),
     ok = application:set_env(app1, exometer_predefined, {script, Scr}),
-    Config;
+    [{started_apps, StartedApps} | Config];
 init_per_testcase(_Case, Config) ->
-    exometer:start(),
-    Config.
+    {ok, StartedApps} = exometer_test_util:ensure_all_started(exometer_core),
+    ct:log("StartedApps = ~p~n", [StartedApps]),
+    [{started_apps, StartedApps} | Config].
 
-end_per_testcase(Case, _Config) when
+end_per_testcase(Case, Config) when
       Case == test_folsom_histogram;
       Case == test_history1_folsom;
       Case == test_history4_folsom ->
-    exometer:stop(),
+    _ = stop_started_apps(Config),
     folsom:stop(),
     application:stop(bear),
     ok;
-end_per_testcase(Case, _Config) when
+end_per_testcase(Case, Config) when
       Case == test_ext_predef;
       Case == test_function_match ->
-    ok = application:unset_env(common_test, exometer_predefined),
-    exometer:stop(),
-    ok = application:stop(setup),
+    ok = application:unset_env(stdlib, exometer_predefined),
+    _ = stop_started_apps(Config),
     ok;
-end_per_testcase(test_app_predef, _Config) ->
+end_per_testcase(test_app_predef, Config) ->
+    ok = application:unset_env(app1, exometer_predefined),
     ok = application:stop(app1),
-    exometer:stop(),
+    _ = stop_started_apps(Config),
     ok;
-end_per_testcase(_Case, _Config) ->
-    exometer:stop(),
+end_per_testcase(_Case, Config) ->
+    _ = stop_started_apps(Config),
     ok.
+
+stop_started_apps(Config) ->
+    [stop_app(App) ||
+        App <- lists:reverse(?config(started_apps, Config))].
+
+stop_app(App) ->
+    case application:stop(App) of
+        ok -> ok;
+        {error, {not_started, _}} ->
+            ok
+    end.
 
 %%%===================================================================
 %%% Test Cases
@@ -188,6 +207,25 @@ test_fast_counter(_Config) ->
     fc(),
     {ok, [{value, 2}]} = exometer:get_value(C, [value]),
     {ok, [{value, 2}, {ms_since_reset, _}]} = exometer:get_value(C),
+    ok.
+
+test_wrapping_counter(_Config) ->
+    C = [?MODULE, ctr, ?LINE],
+    ok = exometer:new(C, counter, []),
+    Max16 = 65534,
+    Max32 = 4294967294,
+    Max64 = 18446744073709551614,
+    Max64p1 = 18446744073709551615,
+    Max64p21 = 18446744073709551635,
+    ok = exometer:update(C, Max64),
+    {ok, [{value, Max64}, {value16, Max16}, {value32, Max32}, {value64, Max64}]} =
+      exometer:get_value(C, [value, value16, value32, value64]),
+    ok = exometer:update(C, 1),
+    {ok, [{value, Max64p1}, {value16, 0}, {value32, 0}, {value64, 0}]} =
+      exometer:get_value(C, [value, value16, value32, value64]),
+    [ok = exometer:update(C, 1) || _ <- lists:seq(1, 20)],
+    {ok, [{value, Max64p21}, {value16, 20}, {value32, 20}, {value64, 20}]} =
+      exometer:get_value(C, [value, value16, value32, value64]),
     ok.
 
 test_update_or_create(_Config) ->
@@ -237,6 +275,24 @@ test_std_histogram(_Config) ->
     [ok = update_(C,V) || V <- vals()],
     {_, {ok,DPs}} = timer:tc(exometer, get_value, [C]),
     [{n,134},{mean,2126866},{min,1},{max,9},{median,2},
+     {50,2},{75,3},{90,4},{95,5},{99,8},{999,9}] = scale_mean(DPs),
+    ok.
+
+test_slot_histogram(Config) ->
+    C = [?MODULE, hist, ?LINE],
+    majority(fun test_slot_histogram_/1, [{metric_name, C}|Config]).
+
+test_slot_histogram_({cleanup, Config}) ->
+    C = ?config(metric_name, Config),
+    exometer:delete(C);
+test_slot_histogram_(Config) ->
+    C = ?config(metric_name, Config),
+    ok = exometer:new(C, histogram, [{histogram_module, exometer_slot_slide},
+				     {keep_high, 100},
+                                     {truncate, false}]),
+    [ok = update_(C,V) || V <- vals()],
+    {_, {ok,DPs}} = timer:tc(exometer, get_value, [C]),
+    [{n,_},{mean,2126866},{min,1},{max,9},{median,2},
      {50,2},{75,3},{90,4},{95,5},{99,8},{999,9}] = scale_mean(DPs),
     ok.
 

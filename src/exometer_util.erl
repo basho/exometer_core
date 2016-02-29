@@ -15,6 +15,7 @@
    [
     timestamp/0,
     timestamp_to_datetime/1,
+    get_opt/2,
     get_opt/3,
     get_env/2,
     tables/0,
@@ -22,6 +23,7 @@
     get_statistics/3,
     get_statistics2/4,
     pick_items/2,
+    perc/2,
     histogram/1,
     histogram/2,
     drop_duplicates/1,
@@ -32,7 +34,8 @@
     set_status/2,
     set_event_flag/2,
     clear_event_flag/2,
-    test_event_flag/2
+    test_event_flag/2,
+    ensure_all_started/1
    ]).
 
 -export_type([timestamp/0]).
@@ -58,7 +61,7 @@ timestamp() ->
     (MS-1258)*1000000000 + S*1000 + US div 1000.
 
 -spec timestamp_to_datetime(timestamp()) ->
-				   {calendar:datetime(), non_neg_integer()}.
+                                   {calendar:datetime(), non_neg_integer()}.
 %% @doc Convert timestamp to a regular datetime.
 %%
 %% The timestamp is expected
@@ -76,18 +79,25 @@ get_env(Key, Default) ->
         {ok, Value} ->
             Value;
         _ ->
-	    case get_env1(exometer_core, Key) of
-		{ok, CoreValue} ->
-		    CoreValue;
-		_ ->
-		    Default
-	    end
+            case get_env1(exometer_core, Key) of
+                {ok, CoreValue} ->
+                    CoreValue;
+                _ ->
+                    Default
+            end
     end.
 
 get_env1(App, Key) ->
     case application:get_env(App, Key) of
-	{ok, undefined} -> undefined;
-	Other           -> Other
+        {ok, undefined} -> undefined;
+        Other           -> Other
+    end.
+
+get_opt(K, Opts) ->
+    case lists:keyfind(K, 1, Opts) of
+        {_, V} -> V;
+        false ->
+            error({required, K})
     end.
 
 get_opt(K, Opts, Default) ->
@@ -182,15 +192,15 @@ drop_duplicates(List0) when is_list(List0) ->
     List1 = lists:foldl(
               fun
                   (Elem, Acc) when is_tuple(Elem) ->
-                      case lists:keymember(element(1, Elem), 1, Acc) of
-                          true ->
-                              Acc;
-                          false ->
-                              [Elem | Acc]
-                      end;
+                               case lists:keymember(element(1, Elem), 1, Acc) of
+                                   true ->
+                                       Acc;
+                                   false ->
+                                       [Elem | Acc]
+                               end;
                   (_, Acc) ->
-                      Acc
-              end, [], List0),
+                               Acc
+                       end, [], List0),
     lists:reverse(List1);
 drop_duplicates(Any) ->
     Any.
@@ -206,7 +216,7 @@ histogram(Values, default) ->
 histogram(Values, DataPoints) ->
     H = histogram(Values),
     [DP || {K,_} = DP <- H,
-	   lists:member(K, DataPoints)].
+           lists:member(K, DataPoints)].
 
 -spec get_statistics(Length::non_neg_integer(),
                      Total::non_neg_integer(),
@@ -241,10 +251,10 @@ get_statistics2(L, Sorted, Total, Mean) ->
     Items = [{min,1}, {50, P50}, {median, P50}, {75, perc(0.75,L)},
              {90, perc(0.9,L)}, {95, perc(0.95,L)}, {99, perc(0.99,L)},
              {999, perc(0.999,L)}, {max,L}],
-    [{n,L}, {mean, Mean}, {total, Total} | pick_items(Sorted, 1, Items)].
+    [{n,L}, {mean, Mean}, {total, Total} | pick_items(Sorted, Items)].
 
 -spec pick_items([number()], [{atom() | integer(), integer()}]) ->
-			[{atom(), number()}].
+                        [{atom(), number()}].
 %% @doc Pick values from specified positions in a sorted list of numbers.
 %%
 %% This function is used to extract datapoints (usually percentiles) from
@@ -298,16 +308,16 @@ key_match(_, _)   -> false.
 
 
 get_datapoints(#exometer_entry{module = exometer,
-			       type = T}) when T==counter;
+                               type = T}) when T==counter;
                                                T==fast_counter;
                                                T==gauge ->
     [value, ms_since_reset];
 get_datapoints(#exometer_entry{behaviour = entry,
-			       name = Name, module = M,
-			       type = Type, ref = Ref}) ->
+                               name = Name, module = M,
+                               type = Type, ref = Ref}) ->
     M:get_datapoints(Name, Type, Ref);
 get_datapoints(#exometer_entry{behaviour = probe,
-			       name = Name, type = Type, ref = Ref}) ->
+                               name = Name, type = Type, ref = Ref}) ->
     exometer_probe:get_datapoints(Name, Type, Ref).
 
 set_call_count({M, F}, Bool) ->
@@ -320,9 +330,9 @@ get_status(enabled) -> enabled;
 get_status(disabled) -> disabled;
 get_status(St) when is_integer(St) ->
     if St band 2#1 == 1 ->
-	    enabled;
+            enabled;
        true ->
-	    disabled
+            disabled
     end.
 
 set_status(enabled , enabled ) -> 1;
@@ -346,6 +356,35 @@ clear_event_flag(update, disabled) -> 0.
 test_event_flag(update, St) when St band 2#10 =:= 2#10 -> true;
 test_event_flag(update, _) -> false.
 
+%% This implementation is originally from Basho's Webmachine. On
+%% older versions of Erlang, we don't have
+%% application:ensure_all_started, so we use this wrapper function to
+%% either use the native implementation or our own version, depending
+%% on what's available.
+-spec ensure_all_started(atom()) -> {ok, [atom()]} | {error, term()}.
+ensure_all_started(App) ->
+    %% Referencing application:ensure_all_started/1 will anger Xref
+    %% in earlier R16B versions of OTP
+    ensure_all_started(App, []).
+
+%% This implementation is originally from Basho's
+%% Webmachine. Reimplementation of ensure_all_started. NOTE this does
+%% not behave the same as the native version in all cases, but as a
+%% quick hack it works well enough for our purposes. Eventually I
+%% assume we'll drop support for older versions of Erlang and this can
+%% be eliminated.
+ensure_all_started(App, Apps0) ->
+    case application:start(App) of
+        ok ->
+            {ok, lists:reverse([App | Apps0])};
+        {error,{already_started,App}} ->
+            {ok, lists:reverse(Apps0)};
+        {error,{not_started,BaseApp}} ->
+            {ok, Apps} = ensure_all_started(BaseApp, Apps0),
+            ensure_all_started(App, [BaseApp|Apps])
+    end.
+
+
 %% EUnit tests
 -ifdef(TEST).
 
@@ -357,7 +396,7 @@ key_match_test() ->
     {ok,yes} = report_type([a,b,c], [], [{[a,b,'_'], yes}]),
     {ok,yes} = report_type([a,b,c], [], [{[a,'_',c], yes}]),
     {ok,yes} = report_type([a,b,c], [], [{[a,b|'_'], yes}]),
-    {ok,yes} = report_type([a,b,c], [{type,yes}], [{[a,b,c], no}]),
+    {ok,yes} = report_type([a,b,c], [{report_type,yes}], [{[a,b,c], no}]),
     ok.
 
 -endif.
