@@ -16,6 +16,7 @@
   {env,
    [
    ]},
+  {pkg_name, "basho_exometer_core"},
   {maintainers,["basho", "Heinz N. Gies"]},
   {licenses,["MPL"]},
   {links,[{"Github","https://github.com/basho/exometer_core"}]}
