@@ -1,23 +1,11 @@
-%% -*- erlang -*-
-{application, exometer_core,
- [
-  {description, "Code instrumentation and metrics collection package."},
-  {vsn, "1.0.0"},
-  {applications,
-   [
-    kernel,
-    stdlib,
-    setup,
-    lager
-   ]},
-  {mod, {exometer_core_app, []}},
-  {start_phases, [{preset_defaults, []},
-                  {start_reporters, []}]},
-  {env,
-   [
-   ]},
-  {pkg_name, "basho_exometer_core"},
-  {maintainers,["basho", "Heinz N. Gies"]},
-  {licenses,["MPL"]},
-  {links,[{"Github","https://github.com/basho/exometer_core"}]}
- ]}.
+{application,exometer_core,
+             [{description,"Code instrumentation and metrics collection package."},
+              {vsn,"1.0.1"},
+              {applications,[kernel,stdlib,setup,lager]},
+              {mod,{exometer_core_app,[]}},
+              {start_phases,[{preset_defaults,[]},{start_reporters,[]}]},
+              {env,[]},
+              {pkg_name,"basho_exometer_core"},
+              {maintainers,["basho","Heinz N. Gies"]},
+              {licenses,["MPL"]},
+              {links,[{"Github","https://github.com/basho/exometer_core"}]}]}.
