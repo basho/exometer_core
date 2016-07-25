@@ -6,36 +6,27 @@ DIALYZER_APPS = erts kernel stdlib compiler syntax_tools \
 		test_server common_test lager goldrush folsom \
 		parse_trans setup
 
-all: deps compile xref test
+all: compile xref test
 
 ci: compile xref dialyzer test
 
-deps:
-	rebar get-deps
-
 compile:
-	rebar compile
+	rebar3 compile
 
 clean: clean_plt
-	rebar clean
-
-clean-all: clean
-	rm -rf deps
+	rebar3 clean
 
 test:
-	ERL_LIBS=./examples rebar ct skip_deps=true
+	ERL_LIBS=./examples rebar3 ct
 
 xref:
-	ERL_LIBS=./deps rebar xref skip_deps=true
+	ERL_LIBS=./deps rebar3 xref
 
-edown_deps:
-	rebar get-deps compile edown=true
-
-doc: edown_deps
-	rebar doc edown=true skip_deps=true
+doc:
+	rebar3 doc
 
 $(EXOMETER_PLT):
-	rebar get-deps compile
+	rebar3 get-deps compile
 	ERL_LIBS=deps dialyzer --build_plt --output_plt $(EXOMETER_PLT) \
 	--apps $(DIALYZER_APPS)
 

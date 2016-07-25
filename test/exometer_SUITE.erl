@@ -105,6 +105,11 @@ init_per_suite(Config) ->
 end_per_suite(_Config) ->
     ok.
 
+data_file(Config, F) ->
+    filename:join(filename:dirname(
+                    filename:absname(?config(data_dir, Config))),
+                  "data/" ++ F).
+
 init_per_testcase(Case, Config) when
       Case == test_folsom_histogram;
       Case == test_history1_folsom;
@@ -116,16 +121,14 @@ init_per_testcase(Case, Config) when
 init_per_testcase(Case, Config) when
       Case == test_ext_predef;
       Case == test_function_match ->
-    ok = application:set_env(stdlib, exometer_predefined, {script, "../../test/data/test_defaults.script"}),
-    ok = application:start(setup),
+    Scr = data_file(Config, "test_defaults.script"),
+    ok = application:set_env(stdlib, exometer_predefined, {script, Scr}),
     exometer:start(),
     Config;
 init_per_testcase(test_app_predef, Config) ->
     compile_app1(Config),
     exometer:start(),
-    Scr = filename:join(filename:dirname(
-			  filename:absname(?config(data_dir, Config))),
-			"data/app1.script"),
+    Scr = data_file(Config, "app1.script"),
     ok = application:set_env(app1, exometer_predefined, {script, Scr}),
     Config;
 init_per_testcase(_Case, Config) ->
@@ -298,23 +301,23 @@ test_aggregate(_Config) ->
 	exometer:aggregate([{ {[?MODULE,K,'_','_'],'_','_'},[],[true] }], default),
     ok.
 
-test_history1_slide(_Config) ->
-    test_history(1, slide, "../../test/data/puts_time_hist1.bin").
+test_history1_slide(Config) ->
+    test_history(1, slide, data_file(Config, "puts_time_hist1.bin")).
 
-test_history1_slotslide(_Config) ->
-    test_history(1, slot_slide, "../../test/data/puts_time_hist1.bin").
+test_history1_slotslide(Config) ->
+    test_history(1, slot_slide, data_file(Config, "puts_time_hist1.bin")).
 
-test_history1_folsom(_Config) ->
-    test_history(1, folsom, "../../test/data/puts_time_hist1.bin").
+test_history1_folsom(Config) ->
+    test_history(1, folsom, data_file(Config, "puts_time_hist1.bin")).
 
-test_history4_slide(_Config) ->
-    test_history(4, slide, "../../test/data/puts_time_hist4.bin").
+test_history4_slide(Config) ->
+    test_history(4, slide, data_file(Config, "puts_time_hist4.bin")).
 
-test_history4_slotslide(_Config) ->
-    test_history(4, slot_slide, "../../test/data/puts_time_hist4.bin").
+test_history4_slotslide(Config) ->
+    test_history(4, slot_slide, data_file(Config, "puts_time_hist4.bin")).
 
-test_history4_folsom(_Config) ->
-    test_history(4, folsom, "../../test/data/puts_time_hist4.bin").
+test_history4_folsom(Config) ->
+    test_history(4, folsom, data_file(Config, "puts_time_hist4.bin")).
 
 test_ext_predef(_Config) ->
     {ok, [{total, _}]} = exometer:get_value([preset, func], [total]),
@@ -326,9 +329,7 @@ test_app_predef(Config) ->
     ok = application:start(app1),
     [{[app1,c,1],_,_},{[app1,c,2],_,_}] =
 	exometer:find_entries([app1,'_','_']),
-    File = filename:join(
-	     filename:dirname(filename:absname(?config(data_dir,Config))),
-	     "data/app1_upg.script"),
+    File = data_file(Config, "app1_upg.script"),
     application:set_env(app1, exometer_predefined, {script,File}),
     ok = exometer:register_application(app1),
     [{[app1,d,1],_,_}] =
