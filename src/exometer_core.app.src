@@ -1,6 +1,6 @@
 {application,exometer_core,
              [{description,"Code instrumentation and metrics collection package."},
-              {vsn,"1.0.2"},
+              {vsn,"1.0.3"},
               {applications,[kernel,stdlib,setup,lager]},
               {mod,{exometer_core_app,[]}},
               {start_phases,[{preset_defaults,[]},{start_reporters,[]}]},
