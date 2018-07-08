@@ -1,7 +1,18 @@
-[{<<"bear">>,{pkg,<<"bear">>,<<"0.8.3">>},1},
+{"1.1.0",
+[{<<"bear">>,{pkg,<<"bear">>,<<"0.8.7">>},1},
  {<<"edown">>,{pkg,<<"edown">>,<<"0.8.1">>},1},
- {<<"folsom">>,{pkg,<<"folsom">>,<<"0.8.3">>},0},
- {<<"goldrush">>,{pkg,<<"goldrush">>,<<"0.1.8">>},1},
- {<<"lager">>,{pkg,<<"lager">>,<<"3.2.1">>},0},
+ {<<"folsom">>,{pkg,<<"folsom">>,<<"0.8.7">>},0},
+ {<<"goldrush">>,{pkg,<<"goldrush">>,<<"0.1.9">>},1},
+ {<<"lager">>,{pkg,<<"lager">>,<<"3.6.3">>},0},
  {<<"parse_trans">>,{pkg,<<"parse_trans">>,<<"2.9.0">>},0},
- {<<"setup">>,{pkg,<<"setup">>,<<"1.7.0">>},0}].
+ {<<"setup">>,{pkg,<<"setup">>,<<"1.7.0">>},0}]}.
+[
+{pkg_hash,[
+ {<<"bear">>, <<"16264309AE5D005D03718A5C82641FCC259C9E8F09ADEB6FD79CA4271168656F">>},
+ {<<"edown">>, <<"7333B6F6B7BBC736C263E9CEB8261667D7C8F7D92E251829F1A9FE8F24E7B694">>},
+ {<<"folsom">>, <<"A885F0AEEE4C84270954C88A55A5A473D6B2C7493E32FFDC5765412DD555A951">>},
+ {<<"goldrush">>, <<"F06E5D5F1277DA5C413E84D5A2924174182FB108DABB39D5EC548B27424CD106">>},
+ {<<"lager">>, <<"FE78951D174616273F87F0DBC3374D1430B1952E5EFC4E1C995592D30A207294">>},
+ {<<"parse_trans">>, <<"3F5F7B402928FB9FD200C891E635DE909045D1EFAC40CE3F924D3892898F85EB">>},
+ {<<"setup">>, <<"15DF8E57C6DF9755E22BFB1AEF0C640BD97E9889396FDFB2A85A5536A9043674">>}]}
+].
