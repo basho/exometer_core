@@ -10,3 +10,4 @@ rel/example_project
 .rebar
 logs
 _build/
+rebar3.crashdump
